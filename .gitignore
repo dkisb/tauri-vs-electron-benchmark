@@ -29,12 +29,16 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Bun
+bun.lockb
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.cursor/
 
 # OS
 Thumbs.db
