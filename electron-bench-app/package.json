@@ -5,12 +5,13 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint",
-    "electron:dev": "NODE_ENV=development electron .",
-    "electron:build": "vite build && electron-builder",
-    "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\""
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:dev": "bun run electron:compile && NODE_ENV=development electron .",
+    "electron:build": "vite build && bun run electron:compile && electron-builder",
+    "start": "bun run electron:compile && concurrently \"vite\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\""
   },
   "dependencies": {
     "convex": "^1.31.2",
