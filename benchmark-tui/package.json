@@ -1,5 +1,5 @@
 {
-  "name": "tauri-app-benchmark",
+  "name": "benchmark-tui",
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
