@@ -23,6 +23,12 @@ measure_startup() {
   local end_time
   local pid
 
+  # Clean up any stale processes first
+  pkill -f "target/debug/app" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  sleep 1
+
   # Build the app first
   if ! (cd "$app_path" && bun run build &>/dev/null); then
     echo "Error: Build failed"
@@ -38,12 +44,12 @@ measure_startup() {
     (cd "$app_path" && bun run tauri dev 2>/dev/null) &
     pid=$!
   elif [[ "$app_name" == "electron" ]]; then
-    (cd "$app_path" && bun run dev 2>/dev/null) &
+    (cd "$app_path" && bun run start 2>/dev/null) &
     pid=$!
   fi
 
   # Wait for the app window to appear (poll for process to be ready)
-  local max_wait=60
+  local max_wait=300  # 30 seconds (300 * 0.1s)
   local waited=0
   local app_ready=false
   
@@ -51,11 +57,18 @@ measure_startup() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
       # macOS - check if app has a window
       if [[ "$app_name" == "tauri" ]]; then
-        if pgrep -f "tauri-bench-app" &>/dev/null; then
+        # Tauri dev mode runs as target/debug/app
+        if pgrep -f "target/debug/app" &>/dev/null; then
           app_ready=true
           break
         fi
       elif [[ "$app_name" == "electron" ]]; then
+        # Check for Electron Helper (indicates app is fully loaded)
+        if pgrep -f "Electron Helper" &>/dev/null; then
+          app_ready=true
+          break
+        fi
+        # Fallback to main Electron process
         if pgrep -f "Electron" &>/dev/null; then
           app_ready=true
           break
@@ -70,7 +83,7 @@ measure_startup() {
     else
       # Linux - check if process exists
       if [[ "$app_name" == "tauri" ]]; then
-        if pgrep -f "tauri-bench-app" &>/dev/null; then
+        if pgrep -f "target/debug/app" &>/dev/null; then
           app_ready=true
           break
         fi
@@ -93,9 +106,11 @@ measure_startup() {
 
   # Kill the app
   kill $pid 2>/dev/null
-  pkill -f "tauri-bench-app" 2>/dev/null
+  pkill -f "target/debug/app" 2>/dev/null
   pkill -f "electron" 2>/dev/null
-  pkill -f "Electron" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  # removed broad pkill tauri
 
   if [ "$app_ready" = false ]; then
     echo "Error: App did not start within timeout"

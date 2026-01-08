@@ -57,7 +57,7 @@ measure_latency() {
     pid=$!
     dev_port=1420  # Tauri default port
   elif [[ "$app_name" == "electron" ]]; then
-    (cd "$app_path" && bun run dev 2>/dev/null) &
+    (cd "$app_path" && bun run start 2>/dev/null) &
     pid=$!
     dev_port=5173  # Vite default port
   fi
@@ -71,7 +71,8 @@ measure_latency() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
       # macOS - check if app has a window
       if [[ "$app_name" == "tauri" ]]; then
-        if pgrep -f "tauri-bench-app" &>/dev/null; then
+        # Tauri dev mode runs as target/debug/app
+        if pgrep -f "target/debug/app" &>/dev/null; then
           app_ready=true
           break
         fi
@@ -90,7 +91,7 @@ measure_latency() {
     else
       # Linux - check if process exists and has GUI
       if [[ "$app_name" == "tauri" ]]; then
-        if pgrep -f "tauri-bench-app" &>/dev/null; then
+        if pgrep -f "target/debug/app" &>/dev/null; then
           app_ready=true
           break
         fi
@@ -113,9 +114,11 @@ measure_latency() {
   
   # Kill the app
   kill $pid 2>/dev/null
-  pkill -f "tauri-bench-app" 2>/dev/null
+  pkill -f "target/debug/app" 2>/dev/null
   pkill -f "electron" 2>/dev/null
-  pkill -f "Electron" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  # removed broad pkill tauri
   
   if [ "$app_ready" = false ]; then
     echo "Error: App did not start within timeout"

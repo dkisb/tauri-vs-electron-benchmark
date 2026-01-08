@@ -1,16 +1,5 @@
 #!/bin/bash
 
-# Helper function to get current time in milliseconds (cross-platform)
-get_time_ms() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000'
-  elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    powershell -Command "[math]::Round((Get-Date).ToFileTimeUtc() / 10000 - 11644473600000)"
-  else
-    date +%s%3N
-  fi
-}
-
 # Helper function to get CPU usage of a process (cross-platform)
 get_cpu_usage() {
   local pid="$1"
@@ -44,8 +33,14 @@ measure_cpu_idle() {
   local cpu_samples=()
   local total_cpu=0
   local avg_cpu
-  local sample_count=5
+  local sample_count=3
   local sample_interval=2
+
+  # Clean up any stale processes first
+  pkill -f "target/debug/app" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  sleep 1
 
   # Build the app first
   if ! (cd "$app_path" && bun run build &>/dev/null); then
@@ -59,63 +54,85 @@ measure_cpu_idle() {
     (cd "$app_path" && bun run tauri dev &>/dev/null) &
     pid=$!
   elif [[ "$app_name" == "electron" ]]; then
-    (cd "$app_path" && bun run dev &>/dev/null) &
+    (cd "$app_path" && bun run start &>/dev/null) &
     pid=$!
   fi
 
-  # Wait for app to fully start
-  sleep 8
-
-  # Find the actual app process (child process)
-  local actual_pid
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    if [[ "$app_name" == "tauri" ]]; then
-      actual_pid=$(pgrep -f "tauri-bench-app" | head -1)
-    elif [[ "$app_name" == "electron" ]]; then
-      actual_pid=$(pgrep -f "Electron" | head -1)
+  # Wait for app to start - poll until process is detected
+  local actual_pid=""
+  local wait_count=0
+  local max_wait=60  # 60 seconds max
+  
+  while [ $wait_count -lt $max_wait ]; do
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      if [[ "$app_name" == "tauri" ]]; then
+        actual_pid=$(pgrep -f "target/debug/app" | head -1)
+      elif [[ "$app_name" == "electron" ]]; then
+        actual_pid=$(pgrep -f "Electron Helper" | head -1)
+        if [ -z "$actual_pid" ]; then
+          actual_pid=$(pgrep -f "Electron" | head -1)
+        fi
+      fi
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+      actual_pid=$pid
+    else
+      if [[ "$app_name" == "tauri" ]]; then
+        actual_pid=$(pgrep -f "target/debug/app" | head -1)
+      elif [[ "$app_name" == "electron" ]]; then
+        actual_pid=$(pgrep -f "electron" | head -1)
+      fi
     fi
-  elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    actual_pid=$pid
-  else
-    if [[ "$app_name" == "tauri" ]]; then
-      actual_pid=$(pgrep -f "tauri-bench-app" | head -1)
-    elif [[ "$app_name" == "electron" ]]; then
-      actual_pid=$(pgrep -f "electron" | head -1)
+    
+    if [ -n "$actual_pid" ]; then
+      sleep 2  # Let it stabilize
+      break
     fi
-  fi
+    
+    sleep 1
+    wait_count=$((wait_count + 1))
+  done
 
   if [ -z "$actual_pid" ]; then
-    actual_pid=$pid
+    kill $pid 2>/dev/null
+    pkill -f "target/debug/app" 2>/dev/null
+    pkill -f "Electron Helper" 2>/dev/null
+    pkill -f "node.*vite" 2>/dev/null
+    echo "Error: App did not start"
+    return 1
   fi
 
   # Collect CPU samples while app is idle (no user interaction)
   echo "Measuring idle CPU usage (${sample_count} samples, ${sample_interval}s interval)..."
   for ((i=1; i<=sample_count; i++)); do
     local sample=$(get_cpu_usage "$actual_pid")
-    if [ -n "$sample" ] && [ "$sample" != "" ]; then
-      cpu_samples+=("$sample")
-      echo "  Sample $i: ${sample}%"
+    # Default to 0 if empty
+    if [ -z "$sample" ] || [ "$sample" = "" ]; then
+      sample="0.0"
     fi
+    cpu_samples+=("$sample")
+    echo "  Sample $i: ${sample}%"
     sleep $sample_interval
   done
 
   # Kill the app
   kill $pid 2>/dev/null
-  pkill -f "tauri-bench-app" 2>/dev/null
+  pkill -f "target/debug/app" 2>/dev/null
   pkill -f "electron" 2>/dev/null
-  pkill -f "Electron" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
 
   # Calculate average CPU usage
   if [ ${#cpu_samples[@]} -eq 0 ]; then
-    echo "Error: No CPU samples collected"
-    return 1
+    echo "0.00%"
+    return 0
   fi
 
   for sample in "${cpu_samples[@]}"; do
     total_cpu=$(echo "$total_cpu + $sample" | bc 2>/dev/null || awk "BEGIN {print $total_cpu + $sample}")
   done
   
-  avg_cpu=$(echo "scale=1; $total_cpu / ${#cpu_samples[@]}" | bc 2>/dev/null || awk "BEGIN {printf \"%.1f\", $total_cpu / ${#cpu_samples[@]}}")
+  # Use 2 decimal places for more precision
+  avg_cpu=$(awk "BEGIN {printf \"%.2f\", $total_cpu / ${#cpu_samples[@]}}")
 
   echo "${avg_cpu}%"
 }

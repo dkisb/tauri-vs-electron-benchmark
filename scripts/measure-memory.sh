@@ -41,6 +41,12 @@ measure_memory() {
   local sample_count=3
   local sample_interval=2
   
+  # Clean up any stale processes first (be specific to avoid killing shells)
+  pkill -f "target/debug/app" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  sleep 1
+
   # Build the app first
   if ! (cd "$app_path" && bun run build &>/dev/null); then
     echo "Error: Build failed"
@@ -53,34 +59,57 @@ measure_memory() {
     (cd "$app_path" && bun run tauri dev &>/dev/null) &
     pid=$!
   elif [[ "$app_name" == "electron" ]]; then
-    (cd "$app_path" && bun run dev &>/dev/null) &
+    (cd "$app_path" && bun run start &>/dev/null) &
     pid=$!
   fi
   
-  # Wait for app to start
-  sleep 8
+  # Wait for app to start - poll until process is detected
+  local actual_pid=""
+  local wait_count=0
+  local max_wait=60  # 60 seconds max (Tauri needs time to compile)
   
-  # Find the actual app process (child process)
-  local actual_pid
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    if [[ "$app_name" == "tauri" ]]; then
-      actual_pid=$(pgrep -f "tauri-bench-app" | head -1)
-    elif [[ "$app_name" == "electron" ]]; then
-      # Electron spawns multiple processes, get the main one
-      actual_pid=$(pgrep -f "Electron" | head -1)
+  while [ $wait_count -lt $max_wait ]; do
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      if [[ "$app_name" == "tauri" ]]; then
+        # Tauri dev mode runs as target/debug/app
+        actual_pid=$(pgrep -f "target/debug/app" | head -1)
+      elif [[ "$app_name" == "electron" ]]; then
+        # Electron spawns multiple processes, get the main one
+        actual_pid=$(pgrep -f "Electron Helper" | head -1)
+        if [ -z "$actual_pid" ]; then
+          actual_pid=$(pgrep -f "Electron" | head -1)
+        fi
+      fi
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+      actual_pid=$pid
+    else
+      if [[ "$app_name" == "tauri" ]]; then
+        actual_pid=$(pgrep -f "target/debug/app" | head -1)
+      elif [[ "$app_name" == "electron" ]]; then
+        actual_pid=$(pgrep -f "electron" | head -1)
+      fi
     fi
-  elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    actual_pid=$pid
-  else
-    if [[ "$app_name" == "tauri" ]]; then
-      actual_pid=$(pgrep -f "tauri-bench-app" | head -1)
-    elif [[ "$app_name" == "electron" ]]; then
-      actual_pid=$(pgrep -f "electron" | head -1)
+    
+    if [ -n "$actual_pid" ]; then
+      # Found the process, wait a bit more for it to stabilize
+      sleep 2
+      break
     fi
-  fi
+    
+    sleep 1
+    wait_count=$((wait_count + 1))
+  done
 
   if [ -z "$actual_pid" ]; then
-    actual_pid=$pid
+    # Kill the background process
+    kill $pid 2>/dev/null
+    pkill -f "target/debug/app" 2>/dev/null
+    pkill -f "electron" 2>/dev/null
+    pkill -f "Electron Helper" 2>/dev/null
+    pkill -f "node.*vite" 2>/dev/null
+    # removed broad pkill tauri
+    echo "Error: App did not start"
+    return 1
   fi
   
   # Collect memory samples
@@ -96,9 +125,11 @@ measure_memory() {
   
   # Kill the app
   kill $pid 2>/dev/null
-  pkill -f "tauri-bench-app" 2>/dev/null
+  pkill -f "target/debug/app" 2>/dev/null
   pkill -f "electron" 2>/dev/null
-  pkill -f "Electron" 2>/dev/null
+  pkill -f "Electron Helper" 2>/dev/null
+  pkill -f "node.*vite" 2>/dev/null
+  # removed broad pkill tauri
   
   # Calculate average memory usage
   if [ ${#memory_samples[@]} -eq 0 ]; then
@@ -107,10 +138,10 @@ measure_memory() {
   fi
 
   for sample in "${memory_samples[@]}"; do
-    total_memory=$(echo "$total_memory + $sample" | bc 2>/dev/null || awk "BEGIN {print $total_memory + $sample}")
+    total_memory=$(awk "BEGIN {print $total_memory + $sample}")
   done
   
-  avg_memory=$(echo "scale=1; $total_memory / ${#memory_samples[@]}" | bc 2>/dev/null || awk "BEGIN {printf \"%.1f\", $total_memory / ${#memory_samples[@]}}")
+  avg_memory=$(awk "BEGIN {printf \"%.1f\", $total_memory / ${#memory_samples[@]}}")
   
   echo "${avg_memory}M"
 }
