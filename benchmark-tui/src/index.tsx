@@ -96,11 +96,11 @@ async function startAppAndMeasureMemory(
 }
 let rendererRef: Awaited<ReturnType<typeof createCliRenderer>>;
 
-interface Metrics {
+type Metrics = {
   bundleSize: string;
   memoryUsage: string;
   startupTime: string;
-}
+};
 
 function BenchmarkTUI() {
   const [isRunning, setIsRunning] = useState(false);
@@ -212,7 +212,7 @@ const runBenchmarks = async () => {
 
         {/* Metrics Columns */}
         <box flexDirection="row" gap={2}>
-          {/* Tauri Column */}
+          {/* Tauri */}
           <box flexDirection="column" minWidth={25}>
             <text attributes={TextAttributes.BOLD}>TAURI</text>
             <box marginTop={1} flexDirection="column">
@@ -222,7 +222,7 @@ const runBenchmarks = async () => {
             </box>
           </box>
 
-          {/* Electron Column */}
+          {/* Electron */}
           <box flexDirection="column" minWidth={25}>
             <text attributes={TextAttributes.BOLD}>ELECTRON</text>
             <box marginTop={1} flexDirection="column">
