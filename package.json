@@ -1,12 +1,19 @@
 {
-  "name": "tauri-vs-electron-benchmark",
+  "name": "tauri-electron-bench",
   "version": "1.0.0",
-  "private": true,
+  "description": "Benchmark comparing Tauri and Electron",
+  "type": "module",
   "scripts": {
-    "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy"
+    "setup": "cd electron-app && bun install && cd ../tauri-app && bun install && bun run gen-icons",
+    "gen-icons": "bun run scripts/gen-icons.ts",
+    "build": "bun run build:electron && bun run build:tauri",
+    "build:electron": "cd electron-app && bun run build",
+    "build:tauri": "cd tauri-app && bun run build",
+    "bench": "bun run bench/index.ts",
+    "clean": "rimraf electron-app/dist electron-app/out tauri-app/src-tauri/target results/*.json results/*.md"
   },
-  "dependencies": {
-    "convex": "^1.31.2"
+  "devDependencies": {
+    "@types/bun": "latest",
+    "rimraf": "^5.0.0"
   }
 }

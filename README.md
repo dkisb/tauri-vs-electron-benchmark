@@ -1,115 +1,73 @@
-# Tauri vs Electron Benchmark
+﻿# Tauri vs Electron Benchmark
 
-A comprehensive benchmark suite comparing Tauri and Electron desktop app frameworks.
+A focused benchmark comparing **startup time**, **memory usage**, **CPU usage**, and **bundle size** between Tauri and Electron.
 
-## Project Structure
+## Latest Results
 
-```
-├── convex/                 # Shared Convex backend (single database for all apps)
-├── electron-bench-app/     # Electron benchmark app (React)
-├── tauri-bench-app/        # Tauri benchmark app (React)
-├── scripts/                # Benchmark measurement scripts
-└── benchmark-tui/          # TUI for running benchmarks
-```
+<!-- BENCHMARK_RESULTS_START -->
+**Platform:** windows (x64) | **Runs:** 5 | **Date:** 1/15/2026
 
-## Setup
+| Metric | Electron | Tauri | Δ |
+|--------|----------|-------|---|
+| **Startup Time** | 159ms ± 4ms | 255ms ± 5ms | 0.6x |
+| **Memory Usage** | 99.2 MB | 24.5 MB | 4.1x |
+| **CPU (Idle)** | 0.14% | <0.01% | ~ |
+| **Bundle Size** | 268.0 MB | 2.9 MB | 92x |
+| **Installer Size** | 268.0 MB | 1.0 MB | 262x |
+<!-- BENCHMARK_RESULTS_END -->
 
-### 1. Install Dependencies
-
+## Quick Start
 ```bash
-# Install root dependencies (Convex)
+# Install dependencies
 bun install
+bun run setup
 
-# Install Electron app dependencies
-cd electron-bench-app && bun install && cd ..
+# Build both apps (required before benchmarking)
+bun run build
 
-# Install Tauri app dependencies
-cd tauri-bench-app && bun install && cd ..
+# Run all benchmarks
+bun run bench
 ```
 
-### 2. Configure Convex
+## Requirements
 
-The Convex backend is shared at the root level. Run:
+- [Bun](https://bun.sh) (or npm/pnpm)
+- [Rust](https://rustup.rs) (for Tauri)
+- Platform-specific dependencies:
 
+### Windows
+- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++"
+- [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11)
+
+### macOS
 ```bash
-npx convex dev
+xcode-select --install
 ```
 
-This will create a `.env.local` file with your `CONVEX_URL`. You need to copy this URL to both apps:
-
+### Linux (Debian/Ubuntu)
 ```bash
-# Copy the VITE_CONVEX_URL from root .env.local to both apps
-# electron-bench-app/.env.local
-# tauri-bench-app/.env.local
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libssl-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
-Or create the `.env.local` files manually with:
-```
-VITE_CONVEX_URL=https://your-deployment.convex.cloud
-```
+## Benchmarks
 
-### 3. Run the Apps
+| Metric | Description | How It's Measured |
+|--------|-------------|-------------------|
+| **Startup Time** | Cold start to window ready | Timer in main process |
+| **Memory Usage** | RSS after 2s idle | OS process stats |
+| **CPU (Idle)** | CPU % when app is idle | OS process stats over 2s |
+| **Bundle Size** | Unpacked app size | Filesystem walk |
+| **Installer Size** | Distributable size | Installer file size |
 
-**Electron:**
+## Commands
 ```bash
-cd electron-bench-app
-bun run start
+bun run bench              # Run all benchmarks (5 runs each)
+bun run bench --runs 10    # Custom number of runs
+bun run bench --only startup
+bun run bench --only memory
+bun run bench --only cpu
+bun run bench --only size
+bun run bench --only installer
 ```
-
-**Tauri:**
-```bash
-cd tauri-bench-app
-bun run tauri dev
-```
-
-## Running Benchmarks
-
-### Using the Scripts
-
-Source the benchmark scripts and run:
-
-```bash
-source scripts/run-all.sh
-
-# Run all benchmarks for a single app
-run_all ./tauri-bench-app tauri
-run_all ./electron-bench-app electron
-
-# Or compare both apps
-run_comparison ./tauri-bench-app ./electron-bench-app
-```
-
-### Individual Benchmarks
-
-Each benchmark can be run individually:
-
-- `measure-install.sh` - Dependency installation time
-- `measure-build-cold.sh` - Cold build time (clean build)
-- `measure-build-hot.sh` - Hot build time (incremental)
-- `measure-startup.sh` - App startup time
-- `measure-latency.sh` - App launch latency
-- `measure-memory.sh` - Memory usage
-- `measure-cpu-idle.sh` - CPU usage when idle
-- `measure-cpu-load.sh` - CPU usage under load
-- `measure-size.sh` - Bundle size
-- `compare-pms.sh` - Package manager comparison (bun, pnpm, npm, yarn)
-
-## Cross-Platform Support
-
-All benchmark scripts support:
-- **macOS** (darwin)
-- **Windows** (via Git Bash/MSYS2)
-- **Linux**
-
-## Benchmarks Measured
-
-| Metric | Description |
-|--------|-------------|
-| Install Time | Time to install dependencies |
-| Cold Build | Full build from clean state |
-| Hot Build | Incremental build with cache |
-| Startup Time | Time from launch to window visible |
-| Memory Usage | RAM consumption at idle |
-| CPU Idle | CPU % when app is idle |
-| CPU Load | CPU % under simulated load |
-| Bundle Size | Size of built application |
