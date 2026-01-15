@@ -1,0 +1,50 @@
+{
+  "platform": "windows",
+  "arch": "x64",
+  "timestamp": "2026-01-15T15:17:53.910Z",
+  "runs": 5,
+  "electron": {
+    "startupMs": {
+      "mean": 158.546,
+      "stdDev": 4.1902820907428175,
+      "min": 152.96,
+      "max": 164.44
+    },
+    "memoryMB": {
+      "mean": 99.15546875,
+      "stdDev": 5.186004584908067,
+      "min": 88.94921875,
+      "max": 103.48828125
+    },
+    "cpuIdle": {
+      "mean": 0.1388888888888889,
+      "stdDev": 0.17010345435994292,
+      "min": 0,
+      "max": 0.3472222222222222
+    },
+    "sizeBytes": 281042050,
+    "installerBytes": 281042050
+  },
+  "tauri": {
+    "startupMs": {
+      "mean": 255.44400000000002,
+      "stdDev": 5.188701571684387,
+      "min": 246.32,
+      "max": 262.05
+    },
+    "memoryMB": {
+      "mean": 24.4828125,
+      "stdDev": 0.07081418246015413,
+      "min": 24.37109375,
+      "max": 24.58984375
+    },
+    "cpuIdle": {
+      "mean": 0,
+      "stdDev": 0,
+      "min": 0,
+      "max": 0
+    },
+    "sizeBytes": 3057664,
+    "installerBytes": 1071547
+  }
+}
