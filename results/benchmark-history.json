@@ -1,0 +1,154 @@
+{
+  "benchmarks": [
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "timestamp": "2026-01-17T11:38:31.260Z",
+      "runs": 5,
+      "electron": {
+        "startupMs": {
+          "mean": 161.80400000000003,
+          "stdDev": 58.40396993355846,
+          "min": 125.24,
+          "max": 277.72
+        },
+        "memoryMB": {
+          "mean": 114,
+          "stdDev": 0.07905694150420949,
+          "min": 113.90625,
+          "max": 114.09375
+        },
+        "cpuLoad": {
+          "mean": 0.272,
+          "stdDev": 0.3795997892517856,
+          "min": 0,
+          "max": 0.9800000000000001
+        },
+        "sizeBytes": 244318159,
+        "installerBytes": 244318159
+      },
+      "tauri": {
+        "startupMs": {
+          "mean": 230.406,
+          "stdDev": 133.33848140728168,
+          "min": 154.68,
+          "max": 495.92
+        },
+        "memoryMB": {
+          "mean": 67.83125,
+          "stdDev": 0.3120934855936599,
+          "min": 67.3125,
+          "max": 68.296875
+        },
+        "cpuLoad": {
+          "mean": 0.004,
+          "stdDev": 0.008,
+          "min": 0,
+          "max": 0.02
+        },
+        "sizeBytes": 3020240,
+        "installerBytes": 1305496
+      }
+    },
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "timestamp": "2026-01-17T11:45:31.777Z",
+      "runs": 5,
+      "electron": {
+        "startupMs": {
+          "mean": 163.46999999999997,
+          "stdDev": 73.98205728418208,
+          "min": 124.53,
+          "max": 311.39
+        },
+        "memoryMB": {
+          "mean": 114.146875,
+          "stdDev": 0.1146496020490259,
+          "min": 113.984375,
+          "max": 114.28125
+        },
+        "cpuLoad": {
+          "mean": 0.012,
+          "stdDev": 0.009797958971132713,
+          "min": 0,
+          "max": 0.02
+        },
+        "sizeBytes": 244318159,
+        "installerBytes": 244318159
+      },
+      "tauri": {
+        "startupMs": {
+          "mean": 233.64600000000002,
+          "stdDev": 141.13963704076895,
+          "min": 159.83,
+          "max": 515.9
+        },
+        "memoryMB": {
+          "mean": 67.878125,
+          "stdDev": 0.20808839768233117,
+          "min": 67.625,
+          "max": 68.140625
+        },
+        "cpuLoad": {
+          "mean": 0,
+          "stdDev": 0,
+          "min": 0,
+          "max": 0
+        },
+        "sizeBytes": 3020240,
+        "installerBytes": 1305503
+      }
+    },
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "timestamp": "2026-01-17T11:47:53.871Z",
+      "runs": 5,
+      "electron": {
+        "startupMs": {
+          "mean": 172.43400000000003,
+          "stdDev": 85.824188105685,
+          "min": 124.97,
+          "max": 343.99
+        },
+        "memoryMB": {
+          "mean": 113.53125,
+          "stdDev": 0.14523687548277814,
+          "min": 113.359375,
+          "max": 113.6875
+        },
+        "cpuLoad": {
+          "mean": 0.016,
+          "stdDev": 0.014966629547095765,
+          "min": 0,
+          "max": 0.04
+        },
+        "sizeBytes": 244318159,
+        "installerBytes": 244318159
+      },
+      "tauri": {
+        "startupMs": {
+          "mean": 167.614,
+          "stdDev": 14.57546102186823,
+          "min": 153.61,
+          "max": 193.86
+        },
+        "memoryMB": {
+          "mean": 67.559375,
+          "stdDev": 0.1669463798649135,
+          "min": 67.265625,
+          "max": 67.78125
+        },
+        "cpuLoad": {
+          "mean": 0,
+          "stdDev": 0,
+          "min": 0,
+          "max": 0
+        },
+        "sizeBytes": 3020240,
+        "installerBytes": 1305503
+      }
+    }
+  ]
+}

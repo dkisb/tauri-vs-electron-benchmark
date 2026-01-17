@@ -5,15 +5,23 @@ A focused benchmark comparing **startup time**, **memory usage**, **CPU usage**,
 ## Latest Results
 
 <!-- BENCHMARK_RESULTS_START -->
-**Platform:** windows (x64) | **Runs:** 5 | **Date:** 1/15/2026
+**Platform:** macos (arm64) | **Runs:** 5 | **Date:** 1/17/2026
 
 | Metric | Electron | Tauri | Δ |
 |--------|----------|-------|---|
-| **Startup Time** | 159ms ± 4ms | 255ms ± 5ms | 0.6x |
-| **Memory Usage** | 99.2 MB | 24.5 MB | 4.1x |
-| **CPU (Idle)** | 0.14% | <0.01% | ~ |
-| **Bundle Size** | 268.0 MB | 2.9 MB | 92x |
-| **Installer Size** | 268.0 MB | 1.0 MB | 262x |
+| **Startup Time** | 172ms ± 86ms | 168ms ± 15ms | 1.0x |
+| **Memory Usage** | 113.5 MB | 67.6 MB | 1.7x |
+| **CPU (Load)** | 0.0% | 0.0% | ~ |
+| **Bundle Size** | 233.0 MB | 2.9 MB | 81x |
+| **Installer Size** | 233.0 MB | 1.2 MB | 187x |
+
+## 📜 Benchmark History
+
+| # | Date | Platform | Startup (E/T) | Memory (E/T) | Bundle (E/T) |
+|---|------|----------|---------------|--------------|---------------|
+| 3 | 1/17/2026 | macos/arm64 | 172ms / 168ms | 114MB / 68MB | 233.0 MB / 2.9 MB |
+| 2 | 1/17/2026 | macos/arm64 | 163ms / 234ms | 114MB / 68MB | 233.0 MB / 2.9 MB |
+| 1 | 1/17/2026 | macos/arm64 | 162ms / 230ms | 114MB / 68MB | 233.0 MB / 2.9 MB |
 <!-- BENCHMARK_RESULTS_END -->
 
 ## Quick Start

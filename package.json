@@ -4,8 +4,10 @@
   "description": "Benchmark comparing Tauri and Electron",
   "type": "module",
   "scripts": {
-    "setup": "cd electron-app && bun install && cd ../tauri-app && bun install && bun run gen-icons",
-    "gen-icons": "bun run scripts/gen-icons.ts",
+    "setup": "bun run setup:electron && bun run setup:tauri && bun run setup:icons",
+    "setup:electron": "cd electron-app && bun install",
+    "setup:tauri": "cd tauri-app && bun install",
+    "setup:icons": "bun run scripts/gen-icons.ts",
     "build": "bun run build:electron && bun run build:tauri",
     "build:electron": "cd electron-app && bun run build",
     "build:tauri": "cd tauri-app && bun run build",

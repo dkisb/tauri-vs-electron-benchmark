@@ -6,6 +6,7 @@ import { platform, arch } from "os";
 
 const ROOT = join(import.meta.dir, "..");
 const RESULTS_DIR = join(ROOT, "results");
+const HISTORY_FILE = join(RESULTS_DIR, "benchmark-history.json");
 const README_PATH = join(ROOT, "README.md");
 const DEFAULT_RUNS = 5;
 
@@ -63,7 +64,7 @@ function getTauriExe(): string | null {
     const bundleDir = join(targetDir, "bundle", "macos");
     if (existsSync(bundleDir)) {
       const apps = readdirSync(bundleDir).filter((f: string) => f.endsWith(".app"));
-      if (apps.length > 0) return join(bundleDir, apps[0], "Contents", "MacOS", "TauriBench");
+      if (apps.length > 0) return join(bundleDir, apps[0], "Contents", "MacOS", "tauri-bench-app");
     }
     const p = join(targetDir, "tauri-bench-app");
     if (existsSync(p)) return p;
@@ -104,18 +105,17 @@ async function measureMemory(exePath: string): Promise<number | null> {
   });
 }
 
-async function measureCpuIdle(exePath: string): Promise<number | null> {
+async function measureCpuUnderLoad(exePath: string): Promise<number | null> {
   return new Promise((resolve) => {
-    const proc = spawn(exePath, [], { stdio: ["ignore", "pipe", "pipe"], detached: false });
+    const proc = spawn(exePath, ["--stress"], { stdio: ["ignore", "pipe", "pipe"], detached: false });
     const pid = proc.pid;
     if (!pid) { resolve(null); return; }
 
-    // Wait for app to stabilize (3s), then measure CPU over 5 seconds
     setTimeout(async () => {
       const cpu = await getProcessCpuOverTime(pid, 5000);
       proc.kill();
       resolve(cpu);
-    }, 3000);
+    }, 2000);
 
     proc.on("error", () => resolve(null));
   });
@@ -124,50 +124,22 @@ async function measureCpuIdle(exePath: string): Promise<number | null> {
 async function getProcessCpuOverTime(pid: number, durationMs: number): Promise<number | null> {
   try {
     if (PLATFORM === "windows") {
-      // Use typeperf for more accurate CPU sampling
-      const counterPath = `\\Process(*)\\ID Process`;
+      const startCpu = getWindowsCpuTime(pid);
+      if (startCpu === null) return null;
       
-      // First, get process name from PID
-      const nameResult = spawnSync("powershell", [
-        "-Command",
-        `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`
-      ], { encoding: "utf-8" });
+      const startTime = Date.now();
+      await new Promise(r => setTimeout(r, durationMs));
+      const endTime = Date.now();
       
-      const processName = nameResult.stdout.trim();
-      if (!processName) return null;
-
-      // Sample CPU multiple times over the duration
-      const samples: number[] = [];
-      const sampleCount = 10;
-      const sampleInterval = durationMs / sampleCount;
-
-      for (let i = 0; i < sampleCount; i++) {
-        const cpuResult = spawnSync("powershell", [
-          "-Command",
-          `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).CPU`
-        ], { encoding: "utf-8" });
-        
-        const cpuTime = parseFloat(cpuResult.stdout.trim());
-        if (!isNaN(cpuTime)) {
-          samples.push(cpuTime);
-        }
-        
-        if (i < sampleCount - 1) {
-          await new Promise(r => setTimeout(r, sampleInterval));
-        }
-      }
-
-      if (samples.length >= 2) {
-        // Calculate CPU% from the difference in CPU time
-        const cpuTimeDelta = samples[samples.length - 1] - samples[0];
-        const wallTimeSeconds = (durationMs / 1000) * ((samples.length - 1) / sampleCount);
-        const cpuPercent = (cpuTimeDelta / wallTimeSeconds) * 100;
-        return Math.max(0, cpuPercent);
-      }
+      const endCpu = getWindowsCpuTime(pid);
+      if (endCpu === null) return null;
       
-      return null;
+      const cpuTimeDelta = endCpu - startCpu;
+      const wallTimeSeconds = (endTime - startTime) / 1000;
+      const cpuPercent = (cpuTimeDelta / wallTimeSeconds) * 100;
+      
+      return Math.max(0, Math.min(100, cpuPercent));
     } else {
-      // Use ps on macOS/Linux - sample multiple times
       const samples: number[] = [];
       const sampleCount = 5;
       const sampleInterval = durationMs / sampleCount;
@@ -185,6 +157,16 @@ async function getProcessCpuOverTime(pid: number, durationMs: number): Promise<n
         return samples.reduce((a, b) => a + b, 0) / samples.length;
       }
     }
+  } catch {}
+  return null;
+}
+
+function getWindowsCpuTime(pid: number): number | null {
+  try {
+    const cmd = `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).CPU`;
+    const r = spawnSync("powershell", ["-Command", cmd], { encoding: "utf-8" });
+    const cpuSeconds = parseFloat(r.stdout.trim());
+    if (!isNaN(cpuSeconds)) return cpuSeconds;
   } catch {}
   return null;
 }
@@ -309,16 +291,17 @@ function formatBytes(b: number): string {
 }
 
 function formatCpu(cpu: number): string {
-  if (cpu < 0.01) return "<0.01%";
-  if (cpu < 0.1) return cpu.toFixed(3) + "%";
-  if (cpu < 1) return cpu.toFixed(2) + "%";
   return cpu.toFixed(1) + "%";
 }
 
 interface Results {
   platform: string; arch: string; timestamp: string; runs: number;
-  electron: { startupMs?: any; memoryMB?: any; cpuIdle?: any; sizeBytes?: number; installerBytes?: number };
-  tauri: { startupMs?: any; memoryMB?: any; cpuIdle?: any; sizeBytes?: number; installerBytes?: number };
+  electron: { startupMs?: any; memoryMB?: any; cpuLoad?: any; sizeBytes?: number; installerBytes?: number };
+  tauri: { startupMs?: any; memoryMB?: any; cpuLoad?: any; sizeBytes?: number; installerBytes?: number };
+}
+
+interface BenchmarkHistory {
+  benchmarks: Results[];
 }
 
 async function runBenchmarks() {
@@ -368,18 +351,18 @@ async function runBenchmarks() {
   }
 
   if (!onlyBench || onlyBench === "cpu") {
-    console.log("🔥 Measuring CPU Usage (Idle)...\n");
-    console.log("   (Each measurement takes ~8 seconds)\n");
+    console.log("🔥 Measuring CPU Under Load (50 bouncing balls + calculations)...\n");
+    console.log("   (Each measurement takes ~7 seconds)\n");
     for (const [name, exe, res] of [["Electron", electronExe, results.electron], ["Tauri", tauriExe, results.tauri]] as const) {
       if (!exe) continue;
       const cpus: number[] = [];
       for (let i = 0; i < numRuns; i++) {
         process.stdout.write("   " + name + " run " + (i + 1) + "/" + numRuns + "...");
-        const c = await measureCpuIdle(exe);
+        const c = await measureCpuUnderLoad(exe);
         if (c !== null) { cpus.push(c); console.log(" " + formatCpu(c)); }
         else console.log(" failed");
       }
-      if (cpus.length) res.cpuIdle = calcStats(cpus);
+      if (cpus.length) res.cpuLoad = calcStats(cpus);
     }
     console.log();
   }
@@ -403,8 +386,8 @@ async function runBenchmarks() {
   }
 
   printSummary(results);
-  saveResults(results);
-  updateReadme(results);
+  const history = saveResults(results);
+  updateReadme(results, history);
 }
 
 function printSummary(r: Results) {
@@ -437,13 +420,13 @@ function printSummary(r: Results) {
     ]);
   }
 
-  if (r.electron.cpuIdle || r.tauri.cpuIdle) {
-    const e = r.electron.cpuIdle, t = r.tauri.cpuIdle;
+  if (r.electron.cpuLoad || r.tauri.cpuLoad) {
+    const e = r.electron.cpuLoad, t = r.tauri.cpuLoad;
     lines.push([
-      "CPU (Idle)",
-      e ? formatCpu(e.mean) : "N/A",
-      t ? formatCpu(t.mean) : "N/A",
-      e && t ? (e.mean <= t.mean ? "Electron" : "Tauri") : "—",
+      "CPU (Load)",
+      e ? formatCpu(e.mean) + " ± " + formatCpu(e.stdDev) : "N/A",
+      t ? formatCpu(t.mean) + " ± " + formatCpu(t.stdDev) : "N/A",
+      e && t ? (e.mean < t.mean ? "Electron" : "Tauri") : "—",
     ]);
   }
 
@@ -472,17 +455,39 @@ function printSummary(r: Results) {
   console.log("\n" + "━".repeat(70));
 }
 
-function saveResults(r: Results) {
+function saveResults(r: Results): BenchmarkHistory {
   if (!existsSync(RESULTS_DIR)) mkdirSync(RESULTS_DIR, { recursive: true });
-  const p = join(RESULTS_DIR, "bench-" + PLATFORM + "-" + ARCH + ".json");
-  writeFileSync(p, JSON.stringify(r, null, 2));
-  console.log("\n📄 Results saved to: " + p);
+
+  let history: BenchmarkHistory = { benchmarks: [] };
+  
+  if (existsSync(HISTORY_FILE)) {
+    try {
+      const existing = readFileSync(HISTORY_FILE, "utf-8");
+      history = JSON.parse(existing);
+      if (!Array.isArray(history.benchmarks)) {
+        history.benchmarks = [];
+      }
+    } catch (e) {
+      console.log("⚠️  Could not parse existing history, starting fresh");
+      history = { benchmarks: [] };
+    }
+  }
+
+  history.benchmarks.push(r);
+  writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  
+  console.log("\n📄 Results appended to: " + HISTORY_FILE);
+  console.log("   Total benchmarks in history: " + history.benchmarks.length);
+  
+  return history;
 }
 
-function updateReadme(r: Results) {
+function updateReadme(r: Results, history: BenchmarkHistory) {
   if (!existsSync(README_PATH)) return;
 
   const e = r.electron, t = r.tauri;
+  
+  // Latest results table
   let table = "| Metric | Electron | Tauri | Δ |\n|--------|----------|-------|---|\n";
 
   if (e.startupMs || t.startupMs) {
@@ -501,12 +506,12 @@ function updateReadme(r: Results) {
     table += "| **Memory Usage** | " + eStr + " | " + tStr + " | " + delta + " |\n";
   }
 
-  if (e.cpuIdle || t.cpuIdle) {
-    const eVal = e.cpuIdle?.mean, tVal = t.cpuIdle?.mean;
+  if (e.cpuLoad || t.cpuLoad) {
+    const eVal = e.cpuLoad?.mean, tVal = t.cpuLoad?.mean;
     const eStr = eVal !== undefined ? formatCpu(eVal) : "—";
     const tStr = tVal !== undefined ? formatCpu(tVal) : "—";
-    const delta = eVal !== undefined && tVal !== undefined && tVal > 0.001 ? (eVal / tVal).toFixed(1) + "x" : "~";
-    table += "| **CPU (Idle)** | " + eStr + " | " + tStr + " | " + delta + " |\n";
+    const delta = eVal !== undefined && tVal !== undefined && tVal > 0.1 ? (eVal / tVal).toFixed(1) + "x" : "~";
+    table += "| **CPU (Load)** | " + eStr + " | " + tStr + " | " + delta + " |\n";
   }
 
   if (e.sizeBytes || t.sizeBytes) {
@@ -526,15 +531,45 @@ function updateReadme(r: Results) {
   }
 
   const header = "**Platform:** " + r.platform + " (" + r.arch + ") | **Runs:** " + r.runs + " | **Date:** " + new Date(r.timestamp).toLocaleDateString();
-  const md = header + "\n\n" + table;
+  const latestMd = header + "\n\n" + table;
+
+  // Build history table
+  let historyMd = "\n## 📜 Benchmark History\n\n";
+  historyMd += "| # | Date | Platform | Startup (E/T) | Memory (E/T) | Bundle (E/T) |\n";
+  historyMd += "|---|------|----------|---------------|--------------|---------------|\n";
+
+  // Show all benchmarks, newest first
+  const sortedBenchmarks = [...history.benchmarks].reverse();
+  
+  sortedBenchmarks.forEach((b, idx) => {
+    const num = history.benchmarks.length - idx;
+    const date = new Date(b.timestamp).toLocaleDateString();
+    const plat = b.platform + "/" + b.arch;
+    
+    const eStartup = b.electron.startupMs?.mean;
+    const tStartup = b.tauri.startupMs?.mean;
+    const startupStr = (eStartup ? eStartup.toFixed(0) + "ms" : "—") + " / " + (tStartup ? tStartup.toFixed(0) + "ms" : "—");
+    
+    const eMem = b.electron.memoryMB?.mean;
+    const tMem = b.tauri.memoryMB?.mean;
+    const memStr = (eMem ? eMem.toFixed(0) + "MB" : "—") + " / " + (tMem ? tMem.toFixed(0) + "MB" : "—");
+    
+    const eSize = b.electron.sizeBytes;
+    const tSize = b.tauri.sizeBytes;
+    const sizeStr = (eSize ? formatBytes(eSize) : "—") + " / " + (tSize ? formatBytes(tSize) : "—");
+    
+    historyMd += "| " + num + " | " + date + " | " + plat + " | " + startupStr + " | " + memStr + " | " + sizeStr + " |\n";
+  });
+
+  const fullMd = latestMd + historyMd;
 
   let readme = readFileSync(README_PATH, "utf-8");
   readme = readme.replace(
     /<!-- BENCHMARK_RESULTS_START -->[\s\S]*<!-- BENCHMARK_RESULTS_END -->/,
-    "<!-- BENCHMARK_RESULTS_START -->\n" + md + "<!-- BENCHMARK_RESULTS_END -->"
+    "<!-- BENCHMARK_RESULTS_START -->\n" + fullMd + "<!-- BENCHMARK_RESULTS_END -->"
   );
   writeFileSync(README_PATH, readme);
-  console.log("📝 README.md updated with results");
+  console.log("📝 README.md updated with results and history");
 }
 
 runBenchmarks().catch(console.error);
